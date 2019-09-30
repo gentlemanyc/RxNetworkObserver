@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.net.ConnectivityManager
+import android.os.Handler
 import io.reactivex.disposables.Disposable
 import io.reactivex.subjects.PublishSubject
 import java.lang.ref.WeakReference
@@ -20,10 +21,11 @@ object RxNetworkObserver {
     lateinit var subject: PublishSubject<Int>
     private var receiver: NetWorkReceiver? = null
     private lateinit var reference: WeakReference<Context>
-
+    private var handler = Handler()
     fun init(context: Context) {
         subject = PublishSubject.create()
-        receiver = NetWorkReceiver(context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager)
+        receiver =
+            NetWorkReceiver(context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager)
         reference = WeakReference(context)
         context.registerReceiver(receiver, IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION))
     }
@@ -41,7 +43,7 @@ object RxNetworkObserver {
      */
     fun subscribe(onNext: (Int) -> Unit): Disposable? {
         return subject.debounce(1, TimeUnit.SECONDS).subscribe {
-            onNext(it)
+            handler.post { onNext(it) }
         }
     }
 
