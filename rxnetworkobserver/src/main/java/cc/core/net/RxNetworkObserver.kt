@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.net.ConnectivityManager
 import android.os.Handler
+import android.text.TextUtils
 import io.reactivex.disposables.Disposable
 import io.reactivex.subjects.PublishSubject
 import java.lang.ref.WeakReference
@@ -22,12 +23,20 @@ object RxNetworkObserver {
     private var receiver: NetWorkReceiver? = null
     private lateinit var reference: WeakReference<Context>
     private var handler = Handler()
+    private var type = NET_STATE__MOBILE
+
+    @Deprecated("deprecated", ReplaceWith("register(context:Context)"))
     fun init(context: Context) {
         subject = PublishSubject.create()
         receiver =
             NetWorkReceiver(context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager)
         reference = WeakReference(context)
         context.registerReceiver(receiver, IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION))
+        type = getNetWorkType(context)
+    }
+
+    fun register(context: Context) {
+        init(context)
     }
 
     /**
@@ -42,9 +51,11 @@ object RxNetworkObserver {
      * 订阅(过滤1秒内网络切换过程中状态的变化)
      */
     fun subscribe(onNext: (Int) -> Unit): Disposable? {
-        return subject.debounce(1, TimeUnit.SECONDS).subscribe {
+        val d = subject.debounce(1, TimeUnit.SECONDS).subscribe {
             handler.post { onNext(it) }
         }
+        subject.onNext(type)
+        return d
     }
 
     /**
@@ -54,15 +65,34 @@ object RxNetworkObserver {
         override fun onReceive(context: Context, intent: Intent?) {
             val networkInfo = conn.activeNetworkInfo
             if (networkInfo == null) {
-                RxNetworkObserver.subject.onNext(NET_STATE_DISCONNECT)
+                type = NET_STATE_DISCONNECT
             } else if (networkInfo.getType() == ConnectivityManager.TYPE_WIFI) {
-                RxNetworkObserver.subject.onNext(NET_STATE_WIFI)
+                type = NET_STATE_WIFI
             } else if (networkInfo.getType() == ConnectivityManager.TYPE_MOBILE) {
-                RxNetworkObserver.subject.onNext(NET_STATE__MOBILE)
+                type = NET_STATE__MOBILE
             }
+            subject.onNext(type)
         }
     }
+
+    fun getNetWorkType(context: Context): Int {
+        var netWorkType = -1
+        val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val networkInfo = manager.activeNetworkInfo
+        if (networkInfo != null && networkInfo!!.isConnected) {
+            val typeName = networkInfo!!.typeName
+            if (typeName.equals("WIFI", ignoreCase = true)) {
+                netWorkType = NET_STATE_WIFI
+            } else if (typeName.equals("MOBILE", ignoreCase = true)) {
+                netWorkType = NET_STATE__MOBILE
+            }
+        } else {
+            netWorkType = NET_STATE_DISCONNECT
+        }
+        return netWorkType
+    }
 }
+
 
 /**
  * 网络断开连接
