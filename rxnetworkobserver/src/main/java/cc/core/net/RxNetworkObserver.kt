@@ -1,5 +1,6 @@
 package cc.core.net
 
+import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -17,20 +18,21 @@ import java.util.concurrent.TimeUnit
  * 网络监听观察者
  * 使用Subject来实现观察者，回调网络状态数据。
  */
+@SuppressLint("StaticFieldLeak")
 object RxNetworkObserver {
 
-    lateinit var subject: PublishSubject<Int>
+    var subject = PublishSubject.create<Int>()
     private var receiver: NetWorkReceiver? = null
-    private lateinit var reference: WeakReference<Context>
+    private var context: Context? = null
     private var handler = Handler()
     private var type = NET_STATE__MOBILE
 
     @Deprecated("deprecated", ReplaceWith("register(context:Context)"))
-    fun init(context: Context) {
+    private fun init(context: Context) {
         subject = PublishSubject.create()
         receiver =
             NetWorkReceiver(context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager)
-        reference = WeakReference(context)
+        this.context = context
         context.registerReceiver(receiver, IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION))
         type = getNetWorkType(context)
     }
@@ -44,7 +46,7 @@ object RxNetworkObserver {
      */
     fun unregister() {
         subject.onComplete()
-        reference.get()?.unregisterReceiver(receiver)
+        context?.unregisterReceiver(receiver)
     }
 
     /**
@@ -55,6 +57,7 @@ object RxNetworkObserver {
             handler.post { onNext(it) }
         }
         subject.onNext(type)
+        context = null
         return d
     }
 
