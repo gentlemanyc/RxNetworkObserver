@@ -42,7 +42,9 @@ class RxNetworkObserver {
     }
 
     /**
-     * 全局注册
+     * 注册广播
+     * @param lifecycleOwner lifecycle组件，activity或者fragment。如果传空，则需要手动调用unregister方法解注册。
+     * 如果不传空，则界面退出时会自动解注册，并且在onPause执行时，不会发射网络状态的改变，在onResume时会发射一次网络状态。
      */
     fun reginster(context: Context, lifecycleOwner: LifecycleOwner?): RxNetworkObserver {
         init(context)
