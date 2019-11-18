@@ -1,6 +1,7 @@
 package com.example.tsetnetwork
 
-import android.support.v7.app.AppCompatActivity
+import android.content.Intent
+import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import cc.core.net.NET_STATE_DISCONNECT
 import cc.core.net.RxNetworkObserver
@@ -12,8 +13,8 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        RxNetworkObserver.globalReginster(this)
-        RxNetworkObserver.subject.filter {
+        RxNetworkObserver().reginster(this, this)
+            .subject.filter {
             it != NET_STATE_DISCONNECT
         }.debounce(1, TimeUnit.SECONDS).subscribe {
             runOnUiThread {
@@ -21,10 +22,9 @@ class MainActivity : AppCompatActivity() {
             }
             println("网络类型变了，${it}")
         }
+        tv.setOnClickListener {
+            startActivity(Intent(this, Main2Activity::class.java))
+        }
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        RxNetworkObserver.globalUnregister()
-    }
 }

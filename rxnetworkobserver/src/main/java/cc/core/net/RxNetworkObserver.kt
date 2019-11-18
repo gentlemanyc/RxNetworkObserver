@@ -7,10 +7,10 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.net.ConnectivityManager
 import android.os.Handler
-import android.text.TextUtils
+import androidx.lifecycle.*
 import io.reactivex.disposables.Disposable
 import io.reactivex.subjects.PublishSubject
-import java.lang.ref.WeakReference
+import io.reactivex.subjects.Subject
 import java.util.concurrent.TimeUnit
 
 
@@ -19,32 +19,61 @@ import java.util.concurrent.TimeUnit
  * 使用Subject来实现观察者，回调网络状态数据。
  */
 @SuppressLint("StaticFieldLeak")
-object RxNetworkObserver {
+class RxNetworkObserver {
 
     var subject = PublishSubject.create<Int>()
     private var receiver: NetWorkReceiver? = null
     private var context: Context? = null
     private var handler = Handler()
     private var type = NET_STATE__MOBILE
+    private var isPaused = false
 
-    @Deprecated("deprecated", ReplaceWith("globalReginster(context:Context)"))
+    @Deprecated("deprecated", ReplaceWith("reginster(context:Context)"))
     private fun init(context: Context) {
         subject = PublishSubject.create()
         receiver =
-            NetWorkReceiver(context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager)
+            NetWorkReceiver(
+                context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager,
+                this
+            )
         this.context = context
         context.registerReceiver(receiver, IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION))
         type = getNetWorkType(context)
     }
 
-    fun globalReginster(context: Context) {
+    /**
+     * 全局注册
+     */
+    fun reginster(context: Context, lifecycleOwner: LifecycleOwner?): RxNetworkObserver {
         init(context)
+        lifecycleOwner?.lifecycle?.addObserver(obs)
+        return this
+    }
+
+    private val obs = object : LifecycleObserver {
+
+        @OnLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+        fun onDestroy() {
+            unregister()
+        }
+
+        @OnLifecycleEvent(Lifecycle.Event.ON_RESUME)
+        fun onResume() {
+            isPaused = false
+            subject.onNext(type)
+        }
+
+        @OnLifecycleEvent(Lifecycle.Event.ON_PAUSE)
+        fun onPause() {
+            isPaused = true
+        }
+
     }
 
     /**
      * 解注册
      */
-    fun globalUnregister() {
+    fun unregister() {
         subject.onComplete()
         context?.unregisterReceiver(receiver)
     }
@@ -54,7 +83,9 @@ object RxNetworkObserver {
      */
     fun subscribe(onNext: (Int) -> Unit): Disposable? {
         val d = subject.debounce(1, TimeUnit.SECONDS).subscribe {
-            handler.post { onNext(it) }
+            if (!isPaused) {
+                handler.post { onNext(it) }
+            }
         }
         subject.onNext(type)
         context = null
@@ -64,17 +95,20 @@ object RxNetworkObserver {
     /**
      * 广播接收者
      */
-    class NetWorkReceiver(private var conn: ConnectivityManager) : BroadcastReceiver() {
+    class NetWorkReceiver(private var conn: ConnectivityManager, var observer: RxNetworkObserver) :
+        BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent?) {
             val networkInfo = conn.activeNetworkInfo
             if (networkInfo == null) {
-                type = NET_STATE_DISCONNECT
+                observer.type = NET_STATE_DISCONNECT
             } else if (networkInfo.getType() == ConnectivityManager.TYPE_WIFI) {
-                type = NET_STATE_WIFI
+                observer.type = NET_STATE_WIFI
             } else if (networkInfo.getType() == ConnectivityManager.TYPE_MOBILE) {
-                type = NET_STATE__MOBILE
+                observer.type = NET_STATE__MOBILE
             }
-            subject.onNext(type)
+            if (!observer.isPaused) {
+                observer.subject.onNext(observer.type)
+            }
         }
     }
 
