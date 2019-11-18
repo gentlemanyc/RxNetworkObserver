@@ -27,7 +27,7 @@ object RxNetworkObserver {
     private var handler = Handler()
     private var type = NET_STATE__MOBILE
 
-    @Deprecated("deprecated", ReplaceWith("register(context:Context)"))
+    @Deprecated("deprecated", ReplaceWith("globalReginster(context:Context)"))
     private fun init(context: Context) {
         subject = PublishSubject.create()
         receiver =
@@ -37,14 +37,14 @@ object RxNetworkObserver {
         type = getNetWorkType(context)
     }
 
-    fun register(context: Context) {
+    fun globalReginster(context: Context) {
         init(context)
     }
 
     /**
      * 解注册
      */
-    fun unregister() {
+    fun globalUnregister() {
         subject.onComplete()
         context?.unregisterReceiver(receiver)
     }
